@@ -3,9 +3,9 @@
 
 <head>
     <meta charset="utf-8" />
-    <link rel="icon" type="image/png" href="KeepOut/Shiger.jpg">
-    <link rel="shortcut icon" type="image/png" href="KeepOut/Shiger.jpg">
-    <link rel="apple-touch-icon" href="KeepOut/Shiger.jpg">
+    <link rel="icon" type="image/png" href="KeepOut\favicon.png">
+    <link rel="shortcut icon" type="image/png" href="KeepOut\favicon.png">
+    <link rel="apple-touch-icon" href="KeepOut\favicon.png">
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>ソート付きTODO</title>
     <style>
@@ -139,11 +139,140 @@
         #status-bar.ok   { background: #e6f4ea; color: #1a7f37; }
         #status-bar.err  { background: #fde8e8; color: #b91c1c; }
         #status-bar.wait { background: #fef9c3; color: #92400e; }
+
+        /* ── 初回登録画面 ───────────────────────────────── */
+        .setup-screen-label {
+            font-size: 14px;
+            color: #555;
+        }
+
+        .setup-title {
+            text-align: center;
+            font-size: 40px;
+            font-weight: 700;
+            margin: 8px 0 40px;
+            letter-spacing: 1px;
+        }
+
+        .setup-options {
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .setup-card {
+            flex: 1;
+            min-width: 280px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .setup-card .card-head {
+            border: 1px solid #2a4a5a;
+            padding: 18px 16px;
+            width: 100%;
+            text-align: center;
+            font-size: 17px;
+            box-sizing: border-box;
+            background: #fff;
+        }
+
+        .setup-card .arrow {
+            color: #2a6f87;
+            font-size: 40px;
+            line-height: 1;
+            margin: 8px 0;
+        }
+
+        .setup-card .card-desc {
+            text-align: center;
+            color: #2a4a5a;
+            font-size: 15px;
+            margin-bottom: 14px;
+            min-height: 44px;
+        }
+
+        .setup-card .path-row {
+            display: flex;
+            gap: 6px;
+            width: 100%;
+            margin-bottom: 8px;
+        }
+
+        .setup-card input[type=text] {
+            flex: 1;
+            padding: 9px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            min-width: 0;
+        }
+
+        .setup-card .browse-btn {
+            background: #64748b;
+            white-space: nowrap;
+        }
+
+        .setup-card .submit-btn {
+            width: 100%;
+            background: #2a6f87;
+            padding: 11px;
+            font-size: 15px;
+        }
+
+        #setup-error {
+            color: #b91c1c;
+            text-align: center;
+            margin-top: 16px;
+            min-height: 20px;
+            white-space: pre-wrap;
+        }
+
+        .hidden { display: none !important; }
     </style>
 </head>
 
 <body>
-    <div class="wrap">
+    <!-- ── 初回登録画面 ───────────────────────────────── -->
+    <div class="wrap hidden" id="setup-screen">
+        <div class="setup-screen-label">初回登録画面</div>
+        <div class="setup-title">TodoApp</div>
+
+        <div class="setup-options">
+            <!-- 既存のDBを参照 -->
+            <div class="setup-card">
+                <div class="card-head">既存のデータベース<br>を参照する</div>
+                <div class="arrow">↓</div>
+                <div class="card-desc">Microsoft Access<br>DataBaseファイルを参照</div>
+                <div class="path-row">
+                    <input type="text" id="existing-path" placeholder="例: C:\Users\you\OneDrive\Todo.accdb" />
+                    <button class="browse-btn" id="browse-existing">参照</button>
+                </div>
+                <button class="submit-btn" id="use-existing">このDBを使う</button>
+            </div>
+
+            <!-- 新規DBを作成 -->
+            <div class="setup-card">
+                <div class="card-head">新規データベース<br>を作成する</div>
+                <div class="arrow">↓</div>
+                <div class="card-desc">任意のフォルダーを参照し、<br>MADファイルを作成する</div>
+                <div class="path-row">
+                    <input type="text" id="new-folder" placeholder="保存先フォルダー" />
+                    <button class="browse-btn" id="browse-folder">参照</button>
+                </div>
+                <div class="path-row">
+                    <input type="text" id="new-filename" placeholder="ファイル名（例: Todo.accdb）" value="SortTodoDatabase.accdb" />
+                </div>
+                <button class="submit-btn" id="create-new">このフォルダーに作成</button>
+            </div>
+        </div>
+
+        <div id="setup-error"></div>
+    </div>
+
+    <!-- ── メインアプリ ───────────────────────────────── -->
+    <div class="wrap hidden" id="app-screen">
         <h1>ソート付きTODO</h1>
 
         <div class="guide">
@@ -184,10 +313,11 @@
 
         <div class="controls">
             <button id="export-btn" class="muted">JSONでエクスポート</button>
+            <button id="change-db-btn" class="muted">DB設定を変更</button>
         </div>
 
         <p class="small">
-            保存先: <code>C:\Users\hachi\OneDrive\SortTodoDatabase.accdb</code>
+            保存先: <code id="db-path-label">-</code>
         </p>
     </div>
 
@@ -209,6 +339,22 @@
         const deleteSelectedAsap = document.getElementById('delete-selected-asap');
         const exportBtn    = document.getElementById('export-btn');
         const statusBar    = document.getElementById('status-bar');
+
+        // ── 初回登録画面の要素 ──────────────────────────────
+        const setupScreen   = document.getElementById('setup-screen');
+        const appScreen     = document.getElementById('app-screen');
+        const existingPath  = document.getElementById('existing-path');
+        const browseExisting= document.getElementById('browse-existing');
+        const useExistingBtn= document.getElementById('use-existing');
+        const newFolder     = document.getElementById('new-folder');
+        const newFilename   = document.getElementById('new-filename');
+        const browseFolder  = document.getElementById('browse-folder');
+        const createNewBtn  = document.getElementById('create-new');
+        const setupError    = document.getElementById('setup-error');
+        const changeDbBtn   = document.getElementById('change-db-btn');
+        const dbPathLabel   = document.getElementById('db-path-label');
+
+        const DB_PATH_KEY = 'todoapp_db_path';
 
         function setStatus(msg, type) {
             statusBar.textContent = msg;
@@ -397,8 +543,154 @@
             URL.revokeObjectURL(url);
         });
 
-        // ── 起動時にデータ読み込み ──────────────────────────
-        loadTasks();
+        // ── 初回登録画面のロジック ──────────────────────────
+        function showSetup() {
+            setupScreen.classList.remove('hidden');
+            appScreen.classList.add('hidden');
+            setupError.textContent = '';
+        }
+
+        function showApp(path) {
+            setupScreen.classList.add('hidden');
+            appScreen.classList.remove('hidden');
+            if (path) {
+                localStorage.setItem(DB_PATH_KEY, path);
+                dbPathLabel.textContent = path;
+            }
+            loadTasks();
+        }
+
+        // ネイティブダイアログで参照（使えない環境では手入力にフォールバック）
+        async function browse(type) {
+            try {
+                const res = await apiFetch(`/browse?type=${type}`);
+                if (res.supported === false) {
+                    alert('この環境ではダイアログを開けません。パスを直接入力してください。');
+                    return null;
+                }
+                return res.path || null;
+            } catch (e) {
+                alert('参照に失敗しました。パスを直接入力してください。');
+                return null;
+            }
+        }
+
+        // DBパスをサーバーに設定する
+        async function configureDb(mode, path) {
+            setupError.textContent = '';
+            if (!path) {
+                setupError.textContent = 'パスを入力してください。';
+                return;
+            }
+            try {
+                const res = await fetch(API + '/config', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ mode, path }),
+                });
+                const data = await res.json();
+                if (!res.ok) {
+                    setupError.textContent = data.error || '設定に失敗しました。';
+                    return;
+                }
+                showApp(data.path);
+            } catch (e) {
+                setupError.textContent = 'サーバーに接続できません。app.py が起動しているか確認してください。';
+            }
+        }
+
+        browseExisting.addEventListener('click', async () => {
+            const p = await browse('file');
+            if (p) existingPath.value = p;
+        });
+
+        browseFolder.addEventListener('click', async () => {
+            const p = await browse('folder');
+            if (p) newFolder.value = p;
+        });
+
+        useExistingBtn.addEventListener('click', () => {
+            configureDb('existing', existingPath.value.trim());
+        });
+
+        createNewBtn.addEventListener('click', () => {
+            const folder = newFolder.value.trim();
+            let name = newFilename.value.trim() || 'SortTodoDatabase.accdb';
+            if (!folder) {
+                setupError.textContent = '保存先フォルダーを入力してください。';
+                return;
+            }
+            // フォルダーとファイル名を結合（Windowsパス）
+            const sep = folder.endsWith('\\') || folder.endsWith('/') ? '' : '\\';
+            configureDb('new', folder + sep + name);
+        });
+
+        changeDbBtn.addEventListener('click', async () => {
+            if (!confirm('DB設定をリセットして初回登録画面に戻りますか？\n（データベースのデータは削除されません）')) return;
+            try {
+                await fetch(API + '/config', { method: 'DELETE' });
+            } catch (e) { /* ignore */ }
+            localStorage.removeItem(DB_PATH_KEY);
+            showSetup();
+        });
+
+        // localStorageのパスでサーバーへ無言で再接続する（2回目以降の自動ログイン）
+        async function reconnectFromStorage(path) {
+            const res = await fetch(API + '/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ mode: 'existing', path }),
+            });
+            return res.ok;
+        }
+
+        // ── 起動 ─────────────────────────────────────────────
+        async function init() {
+            // 1. localStorageにパスがあれば、登録作業なしで自動接続する
+            const savedPath = localStorage.getItem(DB_PATH_KEY);
+            if (savedPath) {
+                try {
+                    if (await reconnectFromStorage(savedPath)) {
+                        showApp(savedPath);
+                        return;
+                    }
+                    // ファイルが見つからない等で失敗 → 保存パスを破棄して登録画面へ
+                    localStorage.removeItem(DB_PATH_KEY);
+                } catch (e) {
+                    showSetup();
+                    setupError.textContent = 'サーバーに接続できません。app.py が起動しているか確認してください。';
+                    return;
+                }
+            }
+
+            // 2. localStorageに無い場合はサーバーの設定状況を確認
+            try {
+                const cfg = await apiFetch('/config');
+                if (cfg.configured) {
+                    showApp(cfg.path);   // localStorageにも保存される
+                } else {
+                    showSetup();
+                }
+            } catch (e) {
+                showSetup();
+                setupError.textContent = 'サーバーに接続できません。app.py が起動しているか確認してください。';
+            }
+        }
+
+        init();
+
+        // ── 画面を閉じたらバックエンドを自動終了させるためのハートビート ──
+        // 2秒ごとにサーバーへpingを送る。タブ/ウインドウを閉じると送信が止まり、
+        // サーバー側が一定時間pingを受け取らなければ自分で終了する。
+        // （リロードの場合は再読み込み直後にpingが再開するため、誤終了しない）
+        (function heartbeat() {
+            const PING_INTERVAL = 2000;
+            function ping() {
+                fetch(API + '/ping', { method: 'POST', keepalive: true }).catch(() => {});
+            }
+            ping();
+            setInterval(ping, PING_INTERVAL);
+        })();
     </script>
 </body>
 <!--
