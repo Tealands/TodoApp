@@ -1,0 +1,414 @@
+<!doctype html>
+<html lang="ja">
+
+<head>
+    <meta charset="utf-8" />
+    <link rel="icon" type="image/png" href="KeepOut/Shiger.jpg">
+    <link rel="shortcut icon" type="image/png" href="KeepOut/Shiger.jpg">
+    <link rel="apple-touch-icon" href="KeepOut/Shiger.jpg">
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>ソート付きTODO</title>
+    <style>
+        body {
+            font-family: system-ui, -apple-system, Segoe UI, Roboto, 'Noto Sans JP', sans-serif;
+            margin: 24px;
+            background: #f7f8fb
+        }
+
+        .wrap {
+            max-width: 720px;
+            margin: 0 auto;
+            background: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 6px 20px rgba(30, 30, 60, 0.06)
+        }
+
+        h1 {
+            margin: 0 0 12px;
+            font-size: 20px
+        }
+
+        h2 {
+            margin: 24px 0 12px;
+            font-size: 18px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 4px;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 12px;
+            flex-wrap: wrap
+        }
+
+        input[type=text],
+        input[type=datetime-local] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 8px
+        }
+
+        button {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 0;
+            background: #2563eb;
+            color: #fff;
+            cursor: pointer
+        }
+
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0
+        }
+
+        li {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px;
+            border-bottom: 1px solid #f0f2f6;
+            flex-wrap: wrap
+        }
+
+        li .txt {
+            flex: 1
+        }
+
+        .small {
+            font-size: 12px;
+            color: #666
+        }
+
+        .controls {
+            display: flex;
+            gap: 8px;
+            margin-top: 12px;
+            flex-wrap: wrap
+        }
+
+        .muted {
+            background: #eee;
+            color: #333
+        }
+
+        .date-label {
+            font-size: 12px;
+            color: #888;
+            margin-left: 8px;
+        }
+
+        .guide {
+            background: #f0f4ff;
+            border-left: 4px solid #2563eb;
+            padding: 10px 14px;
+            margin-bottom: 16px;
+            border-radius: 6px;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        #bulk-controls-main,
+        #bulk-controls-asap {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .asap-task {
+            background-color: #fff9e6;
+        }
+
+        .asap-input {
+            border-color: #ffc107;
+        }
+
+        #status-bar {
+            font-size: 12px;
+            padding: 4px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 8px;
+        }
+
+        #status-bar.ok   { background: #e6f4ea; color: #1a7f37; }
+        #status-bar.err  { background: #fde8e8; color: #b91c1c; }
+        #status-bar.wait { background: #fef9c3; color: #92400e; }
+    </style>
+</head>
+
+<body>
+    <div class="wrap">
+        <h1>ソート付きTODO</h1>
+
+        <div class="guide">
+            <strong>使い方：</strong>
+            <ul style="margin:6px 0 0 16px;">
+                <li><b>ASAPゾーン：</b> 最優先タスク。締切は設定できません。</li>
+                <li><b>メインリスト：</b> 通常のタスク。締切日時を設定可能。</li>
+                <li>タスクはAccessデータベースに自動保存されます。</li>
+            </ul>
+        </div>
+
+        <span id="status-bar" class="wait">接続中...</span>
+
+        <h2>🔥 ASAPゾーン</h2>
+        <div class="input-row">
+            <input id="asap-input" type="text" placeholder="ASAPでやることを入力" class="asap-input" />
+            <button id="add-asap-btn">追加</button>
+        </div>
+        <div id="bulk-controls-asap">
+            <input type="checkbox" id="select-all-asap"> <label for="select-all-asap">全選択</label>
+            <button id="delete-selected-asap" class="muted">✔ ASAPタスクを削除</button>
+        </div>
+        <ul id="list-asap"></ul>
+
+        <h2>✅ メインリスト</h2>
+        <div class="input-row">
+            <input id="todo-input" type="text" placeholder="やることを入力" />
+            <input id="todo-date" type="datetime-local" style="max-width:180px;" />
+            <button id="add-btn">追加</button>
+        </div>
+        <div id="bulk-controls-main">
+            <input type="checkbox" id="select-all-main"> <label for="select-all-main">全選択</label>
+            <button id="delete-selected-main" class="muted">✔ メインタスクを削除</button>
+        </div>
+        <ul id="list-main"></ul>
+
+        <hr>
+
+        <div class="controls">
+            <button id="export-btn" class="muted">JSONでエクスポート</button>
+        </div>
+
+        <p class="small">
+            保存先: <code>C:\Users\hachi\OneDrive\SortTodoDatabase.accdb</code>
+        </p>
+    </div>
+
+    <script>
+        const API = '/api';
+        let todos = [];
+        let asapTodos = [];
+
+        const input        = document.getElementById('todo-input');
+        const dateInput    = document.getElementById('todo-date');
+        const addBtn       = document.getElementById('add-btn');
+        const listMainEl   = document.getElementById('list-main');
+        const asapInput    = document.getElementById('asap-input');
+        const addAsapBtn   = document.getElementById('add-asap-btn');
+        const listAsapEl   = document.getElementById('list-asap');
+        const selectAllMain    = document.getElementById('select-all-main');
+        const deleteSelectedMain = document.getElementById('delete-selected-main');
+        const selectAllAsap    = document.getElementById('select-all-asap');
+        const deleteSelectedAsap = document.getElementById('delete-selected-asap');
+        const exportBtn    = document.getElementById('export-btn');
+        const statusBar    = document.getElementById('status-bar');
+
+        function setStatus(msg, type) {
+            statusBar.textContent = msg;
+            statusBar.className = type;
+        }
+
+        // ── API ヘルパー ────────────────────────────────────
+        async function apiFetch(path, opts = {}) {
+            const res = await fetch(API + path, {
+                headers: { 'Content-Type': 'application/json' },
+                ...opts,
+            });
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
+        }
+
+        async function loadTasks() {
+            setStatus('読み込み中...', 'wait');
+            try {
+                const tasks = await apiFetch('/tasks');
+                todos     = tasks.filter(t => t.listType === 'main');
+                asapTodos = tasks.filter(t => t.listType === 'asap');
+                setStatus('Accessデータベースに接続済み', 'ok');
+                render();
+            } catch (e) {
+                setStatus('サーバーに接続できません。app.py が起動しているか確認してください。', 'err');
+            }
+        }
+
+        async function apiAdd(task) {
+            return apiFetch('/tasks', { method: 'POST', body: JSON.stringify(task) });
+        }
+
+        async function apiUpdate(id, task) {
+            return apiFetch(`/tasks/${id}`, { method: 'PUT', body: JSON.stringify(task) });
+        }
+
+        async function apiDelete(id) {
+            return apiFetch(`/tasks/${id}`, { method: 'DELETE' });
+        }
+
+        // ── 描画 ────────────────────────────────────────────
+        function createTaskElement(t, listType) {
+            const li = document.createElement('li');
+            if (listType === 'asap') li.classList.add('asap-task');
+
+            const chk = document.createElement('input');
+            chk.type = 'checkbox';
+            chk.className = `select-task-${listType}`;
+            chk.dataset.id = t.id;
+
+            const done = document.createElement('input');
+            done.type = 'checkbox';
+            done.checked = !!t.done;
+            done.addEventListener('change', async () => {
+                t.done = done.checked;
+                await apiUpdate(t.id, t);
+                render();
+            });
+
+            const span = document.createElement('span');
+            span.className = 'txt';
+            span.textContent = t.text;
+            if (t.done) span.style.textDecoration = 'line-through';
+
+            if (listType === 'main' && t.date) {
+                const dateLabel = document.createElement('span');
+                dateLabel.className = 'date-label';
+                const d = new Date(t.date);
+                const wd = ['日','月','火','水','木','金','土'][d.getDay()];
+                const hh = String(d.getHours()).padStart(2, '0');
+                const mm = String(d.getMinutes()).padStart(2, '0');
+                dateLabel.textContent = `期限:${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}(${wd}) ${hh}:${mm}`;
+                li.appendChild(dateLabel);
+            }
+
+            const edit = document.createElement('button');
+            edit.textContent = '編集';
+            edit.className = 'muted';
+            edit.addEventListener('click', async () => {
+                const v = prompt('編集してください', t.text);
+                if (v !== null) {
+                    t.text = v.trim();
+                    await apiUpdate(t.id, t);
+                    render();
+                }
+            });
+
+            const del = document.createElement('button');
+            del.textContent = '削除';
+            del.className = 'muted';
+            del.addEventListener('click', async () => {
+                if (confirm('削除しますか？')) {
+                    await apiDelete(t.id);
+                    if (listType === 'main') todos     = todos.filter(x => x.id !== t.id);
+                    else                     asapTodos = asapTodos.filter(x => x.id !== t.id);
+                    render();
+                }
+            });
+
+            li.prepend(chk, done, span);
+            li.append(edit, del);
+            return li;
+        }
+
+        function render() {
+            listMainEl.innerHTML = '';
+            todos.sort((a, b) => {
+                if (!a.date && !b.date) return (a.createdAt || '').localeCompare(b.createdAt || '');
+                if (!a.date) return 1;
+                if (!b.date) return -1;
+                return a.date.localeCompare(b.date);
+            });
+            todos.forEach(t => listMainEl.appendChild(createTaskElement(t, 'main')));
+
+            listAsapEl.innerHTML = '';
+            asapTodos.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+            asapTodos.forEach(t => listAsapEl.appendChild(createTaskElement(t, 'asap')));
+        }
+
+        // ── タスク追加 ──────────────────────────────────────
+        async function addTodo(text, date, listType) {
+            text = text.trim();
+            if (!text) return;
+            const task = { text, done: false, createdAt: new Date().toISOString(), date: date || null, listType };
+            try {
+                const saved = await apiAdd(task);
+                if (listType === 'main') todos.push(saved);
+                else                     asapTodos.push(saved);
+                render();
+            } catch (e) {
+                alert('保存に失敗しました: ' + e.message);
+            }
+        }
+
+        addBtn.addEventListener('click', () => {
+            addTodo(input.value, dateInput.value, 'main');
+            input.value = ''; dateInput.value = '';
+        });
+
+        addAsapBtn.addEventListener('click', () => {
+            addTodo(asapInput.value, null, 'asap');
+            asapInput.value = '';
+        });
+
+        // Enterキーで追加
+        input.addEventListener('keydown', e => { if (e.key === 'Enter') addBtn.click(); });
+        asapInput.addEventListener('keydown', e => { if (e.key === 'Enter') addAsapBtn.click(); });
+
+        // ── 一括削除 ────────────────────────────────────────
+        selectAllMain.addEventListener('change', () => {
+            document.querySelectorAll('.select-task-main').forEach(c => c.checked = selectAllMain.checked);
+        });
+
+        deleteSelectedMain.addEventListener('click', async () => {
+            const checks = [...document.querySelectorAll('.select-task-main:checked')];
+            if (checks.length === 0) return alert('削除するタスクを選んでください。');
+            if (!confirm(`${checks.length}件のメインタスクを削除しますか？`)) return;
+            const ids = checks.map(c => Number(c.dataset.id));
+            await Promise.all(ids.map(id => apiDelete(id)));
+            todos = todos.filter(t => !ids.includes(t.id));
+            render();
+        });
+
+        selectAllAsap.addEventListener('change', () => {
+            document.querySelectorAll('.select-task-asap').forEach(c => c.checked = selectAllAsap.checked);
+        });
+
+        deleteSelectedAsap.addEventListener('click', async () => {
+            const checks = [...document.querySelectorAll('.select-task-asap:checked')];
+            if (checks.length === 0) return alert('削除するASAPタスクを選んでください。');
+            if (!confirm(`${checks.length}件のASAPタスクを削除しますか？`)) return;
+            const ids = checks.map(c => Number(c.dataset.id));
+            await Promise.all(ids.map(id => apiDelete(id)));
+            asapTodos = asapTodos.filter(t => !ids.includes(t.id));
+            render();
+        });
+
+        // ── JSONエクスポート ────────────────────────────────
+        exportBtn.addEventListener('click', () => {
+            const allData = { todos, asapTodos };
+            if (!todos.length && !asapTodos.length) return alert('データがありません');
+            const blob = new Blob([JSON.stringify(allData, null, 2)], { type: 'application/json' });
+            const url  = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'todos_backup.json'; a.click();
+            URL.revokeObjectURL(url);
+        });
+
+        // ── 起動時にデータ読み込み ──────────────────────────
+        loadTasks();
+    </script>
+</body>
+<!--
+今後の追加要素
+-期限切れのタスクを表示
+-デザイン変更
+-編集機能で日付も変更できるように
+-課題の詳細を書き込めるように
+-課題の進捗をバーで表示できるように
+-ASPSを自由に並べ替えられるように
+    -->
+
+</html>
