@@ -1,10 +1,15 @@
-サイトURL:https://tealands.github.io/SortTodo/
-
-# SortTodo
+# TodoApp
 
 前に作ったSortTodoをレポジトリにします
 
-<img width="1447" height="948" alt="image" src="https://github.com/user-attachments/assets/7589312a-9c58-49e6-bc6f-9d583372643c" />
+詳しい利用手順はForUser.mdを確認してください。
+
+## 省略語
+
+- Microsoft Access Database->MAD
+- Database->DB
+- OneDrive->OD
+- ShellScriptファイル->SHファイル
 
 ## ローカルで動かす方法
 
@@ -35,5 +40,22 @@ python app.py
 
 ## 今後の追加要素
 
-- 万人が使えるように、データを保存するAccessDatabseのパスを指定して、そこにDatabaseファイルがなければ作成する。そして、そのパスはブラウザのローカルストレージに保存するようにする。このパスをonedriveの中などにすることで複数の端末から同じDBにアクセスできる。
+- 万人が使えるように、データを保存するMADのパスを指定して、そこにMADファイルがなければ作成する。そして、そのパスはブラウザのローカルストレージに保存するようにする。このパスをODの中などにすることで複数の端末から同じDBにアクセスできる。
+
+**初回アクセス時のフロー**
+```mermaid
+
+ graph LR
+ A[アプリを起動する] --> B[DBのパスを指定する]
+ B --> C[MADファイルを作成する]
+ C --> D[ローカルストレージにパスを保存する]
+```
+**2回目以降のアクセス時のフロー**
+```mermaid
+ graph LR
+ A[アプリを起動する] --> B[ローカルストレージからDBのパスを取得する]
+ B --> C[DBにアクセスする]
+```
+
 - デスクトップにアイコン付き実行ファイルを作成する
+
