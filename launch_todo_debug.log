@@ -1,0 +1,4 @@
+Found hwnd: 1706246
+Primary monitor work: left=0, top=0, width=1920, height=1032
+Target center coords: x=720, y=381, w=480, h=270
+cv2.moveWindow applied: x=720, y=381

@@ -1,0 +1,15 @@
+# Python
+__pycache__/
+*.pyc
+
+# PyInstaller / Inno Setup ビルド成果物
+build/
+dist/
+Output/
+
+# Access Engine 再配布パッケージ（各自で取得・配置する大きなバイナリ）
+redist/
+
+# ローカルの DB 設定
+db_config.json
+launch_todo_debug.log

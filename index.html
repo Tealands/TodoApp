@@ -289,6 +289,7 @@
         <h2>🔥 ASAPゾーン</h2>
         <div class="input-row">
             <input id="asap-input" type="text" placeholder="ASAPでやることを入力" class="asap-input" />
+            <input id="asap-lesson" type="text" placeholder="授業" style="max-width:160px;" />
             <button id="add-asap-btn">追加</button>
         </div>
         <div id="bulk-controls-asap">
@@ -300,6 +301,7 @@
         <h2>✅ メインリスト</h2>
         <div class="input-row">
             <input id="todo-input" type="text" placeholder="やることを入力" />
+            <input id="todo-lesson" type="text" placeholder="授業" style="max-width:160px;" />
             <input id="todo-date" type="datetime-local" style="max-width:180px;" />
             <button id="add-btn">追加</button>
         </div>
@@ -313,6 +315,7 @@
 
         <div class="controls">
             <button id="export-btn" class="muted">JSONでエクスポート</button>
+            <button id="create-shortcut-btn" class="muted">デスクトップにショートカット作成</button>
             <button id="change-db-btn" class="muted">DB設定を変更</button>
         </div>
 
@@ -327,10 +330,12 @@
         let asapTodos = [];
 
         const input        = document.getElementById('todo-input');
+        const todoLesson   = document.getElementById('todo-lesson');
         const dateInput    = document.getElementById('todo-date');
         const addBtn       = document.getElementById('add-btn');
         const listMainEl   = document.getElementById('list-main');
         const asapInput    = document.getElementById('asap-input');
+        const asapLesson   = document.getElementById('asap-lesson');
         const addAsapBtn   = document.getElementById('add-asap-btn');
         const listAsapEl   = document.getElementById('list-asap');
         const selectAllMain    = document.getElementById('select-all-main');
@@ -338,6 +343,7 @@
         const selectAllAsap    = document.getElementById('select-all-asap');
         const deleteSelectedAsap = document.getElementById('delete-selected-asap');
         const exportBtn    = document.getElementById('export-btn');
+        const createShortcutBtn = document.getElementById('create-shortcut-btn');
         const statusBar    = document.getElementById('status-bar');
 
         // ── 初回登録画面の要素 ──────────────────────────────
@@ -420,6 +426,14 @@
             span.textContent = t.text;
             if (t.done) span.style.textDecoration = 'line-through';
 
+            if (t.lesson) {
+                const lessonLabel = document.createElement('div');
+                lessonLabel.className = 'small';
+                lessonLabel.style.marginRight = '8px';
+                lessonLabel.textContent = `授業: ${t.lesson}`;
+                li.appendChild(lessonLabel);
+            }
+
             if (listType === 'main' && t.date) {
                 const dateLabel = document.createElement('span');
                 dateLabel.className = 'date-label';
@@ -476,10 +490,10 @@
         }
 
         // ── タスク追加 ──────────────────────────────────────
-        async function addTodo(text, date, listType) {
+        async function addTodo(text, date, listType, lesson) {
             text = text.trim();
             if (!text) return;
-            const task = { text, done: false, createdAt: new Date().toISOString(), date: date || null, listType };
+            const task = { text, done: false, createdAt: new Date().toISOString(), date: date || null, listType, lesson: lesson || '' };
             try {
                 const saved = await apiAdd(task);
                 if (listType === 'main') todos.push(saved);
@@ -491,13 +505,13 @@
         }
 
         addBtn.addEventListener('click', () => {
-            addTodo(input.value, dateInput.value, 'main');
-            input.value = ''; dateInput.value = '';
+            addTodo(input.value, dateInput.value, 'main', todoLesson.value);
+            input.value = ''; dateInput.value = ''; todoLesson.value = '';
         });
 
         addAsapBtn.addEventListener('click', () => {
-            addTodo(asapInput.value, null, 'asap');
-            asapInput.value = '';
+            addTodo(asapInput.value, null, 'asap', asapLesson.value);
+            asapInput.value = ''; asapLesson.value = '';
         });
 
         // Enterキーで追加
@@ -542,6 +556,20 @@
             const a = document.createElement('a'); a.href = url; a.download = 'todos_backup.json'; a.click();
             URL.revokeObjectURL(url);
         });
+
+        async function createShortcut() {
+            try {
+                setStatus('ショートカットを作成しています...', 'wait');
+                const res = await apiFetch('/create-shortcut', { method: 'POST' });
+                alert(`デスクトップにショートカットを作成しました:\n${res.path}`);
+                setStatus('ショートカットを作成しました', 'ok');
+            } catch (e) {
+                alert('ショートカットの作成に失敗しました: ' + (e.message || e));
+                setStatus('ショートカット作成に失敗しました', 'err');
+            }
+        }
+
+        createShortcutBtn.addEventListener('click', createShortcut);
 
         // ── 初回登録画面のロジック ──────────────────────────
         function showSetup() {
