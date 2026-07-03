@@ -162,19 +162,20 @@ def ensure_table(db_path):
     if 'Tasks' not in existing:
         cursor.execute("""
             CREATE TABLE Tasks (
-                ID        AUTOINCREMENT PRIMARY KEY,
-                TaskText  MEMO,
-                Done      YESNO,
-                CreatedAt TEXT(50),
-                Deadline  TEXT(50),
-                ListType  TEXT(10),
-                Lesson    TEXT(100)
+                ID         AUTOINCREMENT PRIMARY KEY,
+                TaskText   MEMO,
+                Done       YESNO,
+                CreatedAt  TEXT(50),
+                Deadline   TEXT(50),
+                ListType   TEXT(10),
+                Lesson     TEXT(100),
+                EstMinutes INTEGER
             )
         """)
         conn.commit()
         print('Tasksテーブルを作成しました。')
     else:
-        # 既存テーブルに Lesson カラムが無ければ追加する
+        # 既存テーブルに不足しているカラムがあれば追加する
         cols = [c.column_name for c in cursor.columns(table='Tasks')]
         if 'Lesson' not in cols:
             try:
@@ -185,8 +186,26 @@ def ensure_table(db_path):
                 # AccessのバージョンやドライバによってはALTERが通らない場合がある。
                 # その場合はユーザーに手動で対応してもらう。
                 print('警告: Lesson カラムの追加に失敗しました。手動で追加してください。')
+        if 'EstMinutes' not in cols:
+            try:
+                cursor.execute("ALTER TABLE Tasks ADD COLUMN EstMinutes INTEGER")
+                conn.commit()
+                print('Tasksテーブルに EstMinutes カラムを追加しました。')
+            except Exception:
+                print('警告: EstMinutes カラムの追加に失敗しました。手動で追加してください。')
     cursor.close()
     conn.close()
+
+
+def _to_est_minutes(value):
+    """予想必要時間(分)を整数 or None に正規化する。空文字・不正値は None。"""
+    if value is None or value == '':
+        return None
+    try:
+        n = int(value)
+    except (TypeError, ValueError):
+        return None
+    return n if n >= 0 else None
 
 
 def row_to_dict(row):
@@ -197,7 +216,8 @@ def row_to_dict(row):
         'createdAt': row[3] or '',
         'date':      row[4],
         'listType':  row[5],
-        'lesson':    row[6] if len(row) > 6 else ''
+        'lesson':    row[6] if len(row) > 6 else '',
+        'estMinutes': row[7] if len(row) > 7 else None
     }
 
 
@@ -326,7 +346,7 @@ def get_tasks():
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute(
-        'SELECT ID, TaskText, Done, CreatedAt, Deadline, ListType, Lesson FROM Tasks'
+        'SELECT ID, TaskText, Done, CreatedAt, Deadline, ListType, Lesson, EstMinutes FROM Tasks'
     )
     tasks = [row_to_dict(r) for r in cursor.fetchall()]
     cursor.close()
@@ -337,11 +357,12 @@ def get_tasks():
 @app.route('/api/tasks', methods=['POST'])
 def add_task():
     data = request.get_json()
+    est = _to_est_minutes(data.get('estMinutes'))
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute(
-        'INSERT INTO Tasks (TaskText, Done, CreatedAt, Deadline, ListType, Lesson) VALUES (?, ?, ?, ?, ?, ?)',
-        (data['text'], False, data.get('createdAt'), data.get('date'), data['listType'], data.get('lesson'))
+        'INSERT INTO Tasks (TaskText, Done, CreatedAt, Deadline, ListType, Lesson, EstMinutes) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        (data['text'], False, data.get('createdAt'), data.get('date'), data['listType'], data.get('lesson'), est)
     )
     conn.commit()
     cursor.execute('SELECT @@IDENTITY')
@@ -349,24 +370,26 @@ def add_task():
     cursor.close()
     conn.close()
     return jsonify({
-        'id':        new_id,
-        'text':      data['text'],
-        'done':      False,
-        'createdAt': data.get('createdAt'),
-        'date':      data.get('date'),
-        'listType':  data['listType'],
-        'lesson':    data.get('lesson') or '',
+        'id':         new_id,
+        'text':       data['text'],
+        'done':       False,
+        'createdAt':  data.get('createdAt'),
+        'date':       data.get('date'),
+        'listType':   data['listType'],
+        'lesson':     data.get('lesson') or '',
+        'estMinutes': est,
     }), 201
 
 
 @app.route('/api/tasks/<int:task_id>', methods=['PUT'])
 def update_task(task_id):
     data = request.get_json()
+    est = _to_est_minutes(data.get('estMinutes'))
     conn = get_conn()
     cursor = conn.cursor()
     cursor.execute(
-        'UPDATE Tasks SET TaskText=?, Done=?, Deadline=?, Lesson=? WHERE ID=?',
-        (data['text'], data['done'], data.get('date'), data.get('lesson'), task_id)
+        'UPDATE Tasks SET TaskText=?, Done=?, Deadline=?, Lesson=?, EstMinutes=? WHERE ID=?',
+        (data['text'], data['done'], data.get('date'), data.get('lesson'), est, task_id)
     )
     conn.commit()
     cursor.close()

@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(.venv/Scripts/python.exe -c \"import PIL; from PIL import Image; im=Image.open\\('KeepOut/desktop.png'\\); print\\('OK', im.size, im.mode\\)\")",
+      "Bash(python -c \"from PIL import Image; im=Image.open\\('KeepOut/desktop.png'\\); print\\('OK', im.size, im.mode\\)\")",
+      "Bash(python -m pip install --quiet Pillow)",
+      "Bash(echo \"exit:$?\")",
+      "Bash(python -c \"from PIL import Image; print\\('PIL ok'\\)\")"
+    ]
+  }
+}

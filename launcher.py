@@ -103,6 +103,47 @@ def _arrange_window(title, w, h):
 
         if not hwnd:
             return
+
+        # タスクバー／ウインドウのアイコンをアプリ専用(desktop.ico)に差し替える。
+        # 何もしないと OpenCV のウインドウクラス（実体は python.exe）の既定アイコンが
+        # 表示され、タスクバーに Python のアイコンが出てしまう。
+        try:
+            ico = os.path.join(RES_DIR, "KeepOut", "desktop.ico")
+            if os.path.exists(ico):
+                IMAGE_ICON = 1
+                LR_LOADFROMFILE = 0x00000010
+                WM_SETICON = 0x0080
+                ICON_SMALL = 0
+                ICON_BIG = 1
+                SM_CXICON, SM_CYICON = 11, 12
+                SM_CXSMICON, SM_CYSMICON = 49, 50
+
+                user32.LoadImageW.restype = wintypes.HANDLE
+                user32.LoadImageW.argtypes = [
+                    wintypes.HINSTANCE, wintypes.LPCWSTR, wintypes.UINT,
+                    ctypes.c_int, ctypes.c_int, wintypes.UINT,
+                ]
+                user32.SendMessageW.argtypes = [
+                    wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM,
+                ]
+
+                hicon_big = user32.LoadImageW(
+                    None, ico, IMAGE_ICON,
+                    user32.GetSystemMetrics(SM_CXICON), user32.GetSystemMetrics(SM_CYICON),
+                    LR_LOADFROMFILE,
+                )
+                hicon_small = user32.LoadImageW(
+                    None, ico, IMAGE_ICON,
+                    user32.GetSystemMetrics(SM_CXSMICON), user32.GetSystemMetrics(SM_CYSMICON),
+                    LR_LOADFROMFILE,
+                )
+                if hicon_big:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big)
+                if hicon_small:
+                    user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
+        except Exception:
+            pass
+
         GWL_STYLE = -16
         WS_CAPTION = 0x00C00000
         WS_THICKFRAME = 0x00040000

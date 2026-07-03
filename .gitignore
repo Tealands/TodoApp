@@ -13,3 +13,6 @@ redist/
 # ローカルの DB 設定
 db_config.json
 launch_todo_debug.log
+
+# AI
+.claude

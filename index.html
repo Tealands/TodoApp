@@ -290,6 +290,7 @@
         <div class="input-row">
             <input id="asap-input" type="text" placeholder="ASAPでやることを入力" class="asap-input" />
             <input id="asap-lesson" type="text" placeholder="授業" style="max-width:160px;" />
+            <input id="asap-est" type="number" min="0" placeholder="予想必要時間(分)" style="max-width:140px;" />
             <button id="add-asap-btn">追加</button>
         </div>
         <div id="bulk-controls-asap">
@@ -302,6 +303,7 @@
         <div class="input-row">
             <input id="todo-input" type="text" placeholder="やることを入力" />
             <input id="todo-lesson" type="text" placeholder="授業" style="max-width:160px;" />
+            <input id="todo-est" type="number" min="0" placeholder="予想必要時間(分)" style="max-width:140px;" />
             <input id="todo-date" type="datetime-local" style="max-width:180px;" />
             <button id="add-btn">追加</button>
         </div>
@@ -331,11 +333,13 @@
 
         const input        = document.getElementById('todo-input');
         const todoLesson   = document.getElementById('todo-lesson');
+        const todoEst      = document.getElementById('todo-est');
         const dateInput    = document.getElementById('todo-date');
         const addBtn       = document.getElementById('add-btn');
         const listMainEl   = document.getElementById('list-main');
         const asapInput    = document.getElementById('asap-input');
         const asapLesson   = document.getElementById('asap-lesson');
+        const asapEst      = document.getElementById('asap-est');
         const addAsapBtn   = document.getElementById('add-asap-btn');
         const listAsapEl   = document.getElementById('list-asap');
         const selectAllMain    = document.getElementById('select-all-main');
@@ -402,6 +406,17 @@
             return apiFetch(`/tasks/${id}`, { method: 'DELETE' });
         }
 
+        // 予想必要時間(分)を「1時間30分」のような表記に整形する
+        function formatEst(min) {
+            min = Number(min);
+            if (!isFinite(min) || min <= 0) return `${min}分`;
+            const h = Math.floor(min / 60);
+            const m = min % 60;
+            if (h && m) return `${h}時間${m}分`;
+            if (h)      return `${h}時間`;
+            return `${m}分`;
+        }
+
         // ── 描画 ────────────────────────────────────────────
         function createTaskElement(t, listType) {
             const li = document.createElement('li');
@@ -434,6 +449,13 @@
                 li.appendChild(lessonLabel);
             }
 
+            if (t.estMinutes != null && t.estMinutes !== '') {
+                const estLabel = document.createElement('span');
+                estLabel.className = 'date-label';
+                estLabel.textContent = `予想: ${formatEst(t.estMinutes)}`;
+                li.appendChild(estLabel);
+            }
+
             if (listType === 'main' && t.date) {
                 const dateLabel = document.createElement('span');
                 dateLabel.className = 'date-label';
@@ -448,14 +470,7 @@
             const edit = document.createElement('button');
             edit.textContent = '編集';
             edit.className = 'muted';
-            edit.addEventListener('click', async () => {
-                const v = prompt('編集してください', t.text);
-                if (v !== null) {
-                    t.text = v.trim();
-                    await apiUpdate(t.id, t);
-                    render();
-                }
-            });
+            edit.addEventListener('click', () => enterEditMode(li, t, listType));
 
             const del = document.createElement('button');
             del.textContent = '削除';
@@ -474,6 +489,65 @@
             return li;
         }
 
+        // ── インライン編集 ──────────────────────────────────
+        // 編集ボタンで、その行を入力フォームに切り替える。
+        // 内容・授業・予想必要時間、（メインリストのみ）期限を変更できる。
+        function enterEditMode(li, t, listType) {
+            li.innerHTML = '';
+
+            const textIn = document.createElement('input');
+            textIn.type = 'text';
+            textIn.value = t.text || '';
+            textIn.style.flex = '1';
+
+            const lessonIn = document.createElement('input');
+            lessonIn.type = 'text';
+            lessonIn.placeholder = '授業';
+            lessonIn.value = t.lesson || '';
+            lessonIn.style.maxWidth = '160px';
+
+            const estIn = document.createElement('input');
+            estIn.type = 'number';
+            estIn.min = '0';
+            estIn.placeholder = '予想必要時間(分)';
+            estIn.value = (t.estMinutes != null ? t.estMinutes : '');
+            estIn.style.maxWidth = '140px';
+
+            let dateIn = null;
+            if (listType === 'main') {
+                dateIn = document.createElement('input');
+                dateIn.type = 'datetime-local';
+                dateIn.value = t.date || '';
+                dateIn.style.maxWidth = '180px';
+            }
+
+            const save = document.createElement('button');
+            save.textContent = '保存';
+            save.addEventListener('click', async () => {
+                const newText = textIn.value.trim();
+                if (!newText) { alert('内容を入力してください。'); return; }
+                t.text = newText;
+                t.lesson = lessonIn.value.trim();
+                t.estMinutes = estIn.value === '' ? null : Number(estIn.value);
+                if (dateIn) t.date = dateIn.value || null;
+                await apiUpdate(t.id, t);
+                render();
+            });
+
+            const cancel = document.createElement('button');
+            cancel.textContent = 'キャンセル';
+            cancel.className = 'muted';
+            cancel.addEventListener('click', render);
+
+            // Enterで保存
+            li.addEventListener('keydown', e => { if (e.key === 'Enter') save.click(); });
+
+            li.append(textIn, lessonIn, estIn);
+            if (dateIn) li.append(dateIn);
+            li.append(save, cancel);
+            textIn.focus();
+        }
+
         function render() {
             listMainEl.innerHTML = '';
             todos.sort((a, b) => {
@@ -490,10 +564,11 @@
         }
 
         // ── タスク追加 ──────────────────────────────────────
-        async function addTodo(text, date, listType, lesson) {
+        async function addTodo(text, date, listType, lesson, estMinutes) {
             text = text.trim();
             if (!text) return;
-            const task = { text, done: false, createdAt: new Date().toISOString(), date: date || null, listType, lesson: lesson || '' };
+            const est = (estMinutes === '' || estMinutes == null) ? null : Number(estMinutes);
+            const task = { text, done: false, createdAt: new Date().toISOString(), date: date || null, listType, lesson: lesson || '', estMinutes: est };
             try {
                 const saved = await apiAdd(task);
                 if (listType === 'main') todos.push(saved);
@@ -505,13 +580,13 @@
         }
 
         addBtn.addEventListener('click', () => {
-            addTodo(input.value, dateInput.value, 'main', todoLesson.value);
-            input.value = ''; dateInput.value = ''; todoLesson.value = '';
+            addTodo(input.value, dateInput.value, 'main', todoLesson.value, todoEst.value);
+            input.value = ''; dateInput.value = ''; todoLesson.value = ''; todoEst.value = '';
         });
 
         addAsapBtn.addEventListener('click', () => {
-            addTodo(asapInput.value, null, 'asap', asapLesson.value);
-            asapInput.value = ''; asapLesson.value = '';
+            addTodo(asapInput.value, null, 'asap', asapLesson.value, asapEst.value);
+            asapInput.value = ''; asapLesson.value = ''; asapEst.value = '';
         });
 
         // Enterキーで追加
@@ -725,7 +800,6 @@
 今後の追加要素
 -期限切れのタスクを表示
 -デザイン変更
--編集機能で日付も変更できるように
 -課題の詳細を書き込めるように
 -課題の進捗をバーで表示できるように
 -ASPSを自由に並べ替えられるように
