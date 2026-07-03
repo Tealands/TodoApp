@@ -298,6 +298,7 @@
             <button id="delete-selected-asap" class="muted">✔ ASAPタスクを削除</button>
         </div>
         <ul id="list-asap"></ul>
+        <div id="total-asap" class="small" style="margin-top:6px;font-weight:600;"></div>
 
         <h2>✅ メインリスト</h2>
         <div class="input-row">
@@ -312,6 +313,7 @@
             <button id="delete-selected-main" class="muted">✔ メインタスクを削除</button>
         </div>
         <ul id="list-main"></ul>
+        <div id="total-main" class="small" style="margin-top:6px;font-weight:600;"></div>
 
         <hr>
 
@@ -342,6 +344,8 @@
         const asapEst      = document.getElementById('asap-est');
         const addAsapBtn   = document.getElementById('add-asap-btn');
         const listAsapEl   = document.getElementById('list-asap');
+        const totalMainEl  = document.getElementById('total-main');
+        const totalAsapEl  = document.getElementById('total-asap');
         const selectAllMain    = document.getElementById('select-all-main');
         const deleteSelectedMain = document.getElementById('delete-selected-main');
         const selectAllAsap    = document.getElementById('select-all-asap');
@@ -548,6 +552,15 @@
             textIn.focus();
         }
 
+        // 未完了タスクの予想必要時間(分)を合計する
+        function totalEst(list) {
+            return list.reduce((sum, t) => {
+                if (t.done) return sum;
+                const m = Number(t.estMinutes);
+                return sum + (isFinite(m) && m > 0 ? m : 0);
+            }, 0);
+        }
+
         function render() {
             listMainEl.innerHTML = '';
             todos.sort((a, b) => {
@@ -561,6 +574,11 @@
             listAsapEl.innerHTML = '';
             asapTodos.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
             asapTodos.forEach(t => listAsapEl.appendChild(createTaskElement(t, 'asap')));
+
+            const asapTotal = totalEst(asapTodos);
+            const mainTotal = totalEst(todos);
+            totalAsapEl.textContent = `ASAP 合計必要時間: ${formatEst(asapTotal)}`;
+            totalMainEl.textContent = `通常 合計必要時間: ${formatEst(mainTotal)}`;
         }
 
         // ── タスク追加 ──────────────────────────────────────
